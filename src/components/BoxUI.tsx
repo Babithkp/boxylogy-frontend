@@ -10,6 +10,7 @@ import Background from '../assets/Background.png';
 import Box from '../assets/Box.png';
 import RightSideBar from '../assets/RightSideBar.png';
 import LeftSideBar from '../assets/LeftSideBar.png';
+import { toast } from "sonner";
 
 interface BoxDimensions {
   length: string;
@@ -92,8 +93,24 @@ function BoxUI() {
   const [packedItems, setPackedItems] = useState<PackedItemData[] | null>(null);
 
   const [containerVolume, setContainerVolume] = useState<number>(0);
-  const [leftSideBar, setLeftSideBar] = useState(true);
-  const [rightSideBar, setRightSideBar] = useState(true);
+  const [leftSideBar, setLeftSideBar] = useState(() => window.innerWidth >= 768);
+  const [rightSideBar, setRightSideBar] = useState(() => window.innerWidth >= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setLeftSideBar(false);
+        setRightSideBar(false);
+      } else {
+        setLeftSideBar(true);
+        setRightSideBar(true);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const [totalBoxVolume, setTotalBoxVolume] = useState<number>(0);
   const [totalBoxWeight, setTotalBoxWeight] = useState<number>(0);
 
@@ -269,12 +286,14 @@ function BoxUI() {
         const msg = err?.error || `Server error: ${res.statusText}`;
         setErrorMessage(msg);
         setLoading(false);
+        toast.error("Calculation failed. Please try again.");
         return;
       }
 
       const json = await res.json();
 
       setResults(json.results || []);
+      toast.success("Calculation completed successfully.");
       setNumContainers(json.num_containers || 0);
 
       if (json.results && json.results.length > 0) {
@@ -303,6 +322,7 @@ function BoxUI() {
 
   return (
     <div className="h-screen w-full relative text-black overflow-x-hidden overflow-y-hidden">
+      {/* Navbar */}
       <div className="flex justify-between items-center md:hidden w-full relative top-0 left-0 bg-white py-5 px-5 z-50">
         <h1 className="text-2xl font-semibold">📦BoxLogic</h1>
         <button
@@ -475,7 +495,12 @@ function BoxUI() {
             onClick={handlePlan}
             className="bg-blue-400 hover:bg-blue-500 text-white cursor-pointer py-2 w-full rounded-md"
           >
-            {loading ? "Planning..." : "Update"}
+            {loading ? (
+              <div className="flex items-center justify-center gap-1">
+                <div className="w-7 h-7 rounded-full border-r-2 animate-spin"></div>
+                <div>Calculating...</div>
+              </div>
+            ) : "Update"}
           </button>
         </div>
       </div>
@@ -488,7 +513,7 @@ function BoxUI() {
       >
         {/* LEFT floating handle (mobile) - now uses toggleLeftSidebar */}
         <button
-          className={`absolute z-10 top-[50%] left-0 -translate-y-[50%] w-10 h-40 transition-all duration-300 ease-linear md:hidden ${
+          className={`absolute z-10 top-[50%] left-0 -translate-y-[50%] w-10 h-40 transition-all duration-300 ease-in md:hidden ${
             leftSideBar ? "translate-x-76 md:translate-x-64" : "translate-x-0"
           }`}
           onClick={toggleLeftSidebar}
@@ -498,7 +523,7 @@ function BoxUI() {
 
         {/* RIGHT floating handle (mobile) - now uses toggleRightSidebar */}
         <button
-          className={`absolute z-50 top-[30%] -translate-y-[50%] w-10 h-40 transition-all duration-300 ease-linear md:hidden ${
+          className={`absolute z-50 top-[30%] -translate-y-[50%] w-10 h-40 transition-all duration-300 ease-in md:hidden ${
             rightSideBar ? "right-74" : "-right-2"
           }`}
           onClick={toggleRightSidebar}
@@ -513,8 +538,8 @@ function BoxUI() {
             className="w-full h-full object-cover bg-white absolute top-0 left-0"
           />
           {/* Top stats */}
-          <div className="w-full md:w-[55%] mx-0 absolute top-5 flex flex-col gap-3 text-white font-semibold p-3 rounded-md">
-            <div className="flex overflow-x-auto sidebar">
+          <div className="w-full md:w-[55%] mx-0 absolute py-7 flex flex-col gap-3 text-white font-semibold p-3 rounded-md">
+            <div className="flex overflow-x-auto sidebar w-full">
               {boxDimensions.map((box, i) => (
                 <div key={i} className="text-black flex-shrink-0 flex flex-col items-center text-sm px-3">
                   <p className="text-[10px]">
@@ -556,16 +581,16 @@ function BoxUI() {
         </div>
       </div>
 
-      {/* Right Sidebar (unchanged visual layout, toggles now use mutual-exclusion helpers) */}
+      {/* Right Sidebar*/}
       <div
         className={`sidebar ${
           rightSideBar ? "translate-x-0" : "translate-x-full"
-        } w-76 md:w-64 bg-white h-screen z-20 py-1 px-3 overflow-auto absolute top-0 right-0 border-l border-gray-300 mt-15 md:mt-0`}
+        } w-76 md:w-64 transition-all duration-300 ease-in bg-white h-screen z-20 py-1 px-3 overflow-auto absolute top-0 right-0 border-l border-gray-300 mt-15 md:mt-0`}
       >
         {/* Results area */}
         <div className="pointer-events-auto">
           <div className="bg-white rounded-md p-3 max-h-30 overflow-auto sidebar">
-            <div className="flex justify-center items-center mb-2">
+            {/* <div className="flex justify-center items-center mb-2">
               <button
                 className="border border-gray-300 hover:bg-gray-100 cursor-pointer px-3 py-1 rounded-md md:flex items-center gap-2 hidden w-full justify-center"
                 onClick={() => {
@@ -587,7 +612,7 @@ function BoxUI() {
                 <IoMdDownload />
                 Export Results
               </button>
-            </div>
+            </div> */}
 
             {loading && <p>Planning containers... (this may take a moment)</p>}
             {errorMessage && <div className="text-red-600 font-medium">{errorMessage}</div>}
@@ -689,7 +714,14 @@ function BoxUI() {
               onClick={handlePlan}
               className="bg-blue-400 hover:bg-blue-500 text-white cursor-pointer w-full py-2 rounded-md"
             >
-              {loading ? "Planning..." : "Update"}
+              {loading ?
+                <div className="flex items-center justify-center gap-1">
+                  <div className="w-7 h-7 rounded-full border-r-2 animate-spin"></div>
+                  <div>Calculating...</div>
+                </div>
+                : 
+                "Update"
+              }
             </button>
           </div>
         </div>
