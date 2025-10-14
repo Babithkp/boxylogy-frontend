@@ -379,7 +379,7 @@ export default function ThreeJsStaticOptimized({
     >
       <button
         onClick={handleExportPNG}
-        className="absolute md:top-7 right-5 w-[90%] md:w-56 flex justify-center items-center bg-blue-400 hover:bg-blue-500 py-2 text-white rounded cursor-pointer"
+        className="absolute top-5 md:top-7 right-5 w-[90%] md:w-56 flex justify-center items-center bg-blue-400 hover:bg-blue-500 py-2 text-white rounded cursor-pointer"
       >
         Export PNG
       </button>
