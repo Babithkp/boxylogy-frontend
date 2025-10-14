@@ -229,7 +229,7 @@ function BoxUI() {
       totalWeight += boxWeight;
     });
 
-    setTotalBoxVolume(Number(totalVolume.toFixed(6)));
+    setTotalBoxVolume(Number(totalVolume.toFixed(3)));
     setTotalBoxWeight(Number(totalWeight.toFixed(3)));
   }, [boxDimensions]);
 
@@ -255,6 +255,13 @@ function BoxUI() {
     setPackedItems(null);
 
     try {
+      const maxCapNum = Number(containerDimensions.maxCapacity || 0);
+      if (containerDimensions.maxCapacity && !isNaN(maxCapNum) && maxCapNum < totalBoxWeight) {
+        toast.error("Container capacity is less than total box weight. Please adjust container capacity or box weights.");
+        setLoading(false);
+        return;
+      }
+
       const payload = {
         container_length: Number(containerDimensions.length || 0),
         container_width: Number(containerDimensions.width || 0),
