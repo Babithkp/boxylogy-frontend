@@ -97,19 +97,22 @@ function BoxUI() {
   const [rightSideBar, setRightSideBar] = useState(() => window.innerWidth >= 768);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setLeftSideBar(false);
-        setRightSideBar(false);
-      } else {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      if (e.matches) {
         setLeftSideBar(true);
         setRightSideBar(true);
+      } else {
+        setLeftSideBar(false);
+        setRightSideBar(false);
       }
     };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    handleChange(mq);
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
   }, []);
+  
+
 
   const [totalBoxVolume, setTotalBoxVolume] = useState<number>(0);
   const [totalBoxWeight, setTotalBoxWeight] = useState<number>(0);
