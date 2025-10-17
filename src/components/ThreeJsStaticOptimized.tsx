@@ -1,5 +1,5 @@
 // ThreeJsStaticOptimized.tsx
-import React, { useEffect, useRef, useImperativeHandle } from "react";
+import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
@@ -23,7 +23,7 @@ type ContainerDim = {
 
 type PackedItemData = {
   name: string;
-  position: any;
+  position: any; // array [x,y,z] or object {x,y,z}
   dimensions: {
     length: number;
     width: number;
@@ -41,14 +41,8 @@ type Props = {
   packedItemsData?: PackedItemData[];
 };
 
-type ExportHandles = {
-  exportPNG: () => void;
-};
-
 const convertToMeters = (value: number, unit: string = "m"): number => {
   switch (unit) {
-    case "ft":
-      return value * 0.3048;
     case "cm":
       return value / 100;
     case "mm":
@@ -61,18 +55,15 @@ const convertToMeters = (value: number, unit: string = "m"): number => {
   }
 };
 
-const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function ThreeJsStaticOptimized(
-  {
-    containerDimensions,
-    boxDimensions,
-    style,
-    className,
-    maxInstances = 1200,
-    showGrid = false,
-    packedItemsData,
-  }: Props,
-  ref
-) {
+export default function ThreeJsStaticOptimized({
+  containerDimensions,
+  boxDimensions,
+  style,
+  className,
+  maxInstances = 1200,
+  showGrid = false,
+  packedItemsData,
+}: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -82,7 +73,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // --- Cleanup previous scene if any ---
+    // --- Cleanup previous scene ---
     if (rendererRef.current) {
       try {
         rendererRef.current.forceContextLoss();
@@ -183,12 +174,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
       const gridSize = Math.max(containerLength, containerWidth) * sceneScale;
       const grid = new THREE.GridHelper(gridSize, 10);
       (grid.material as THREE.Material).transparent = true;
-      // assign opacity safely
-      try {
-        ((grid.material as unknown) as { opacity: number }).opacity = 0.1;
-      } catch (e) {
-        console.log(e);  
-      }
+      (grid.material as unknown as THREE.Material).opacity = 0.1;
       grid.position.y = 0.001;
       scene.add(grid);
     }
@@ -356,36 +342,28 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     showGrid,
   ]);
 
-  // Expose exportPNG via ref
-  useImperativeHandle(ref, () => ({
-    exportPNG: () => {
-      const renderer = rendererRef.current;
-      const scene = sceneRef.current;
-      if (!renderer || !scene) return;
+  const handleExportPNG = () => {
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    if (!renderer || !scene) return;
 
-      const cam = (controlsRef.current?.object as unknown) as THREE.Camera | undefined;
-      if (!cam) return;
+    const cam = controlsRef.current?.object as unknown as THREE.Camera;
+    if (!cam) return;
 
-      // Save previous clear color/alpha
-      const prevColor = renderer.getClearColor(new THREE.Color());
-      const prevAlpha = renderer.getClearAlpha();
+    const prevClearColor = renderer.getClearColor(new THREE.Color());
+    const prevAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(new THREE.Color("#ffffff"), 1);
+    renderer.render(scene, cam);
+    const dataURL = renderer.domElement.toDataURL("image/png");
+    renderer.setClearColor(prevClearColor, prevAlpha);
 
-      // render with white background for export
-      renderer.setClearColor(new THREE.Color("#ffffff"), 1);
-      renderer.render(scene, cam);
-      const dataURL = renderer.domElement.toDataURL("image/png");
-
-      // restore clear color
-      renderer.setClearColor(prevColor, prevAlpha);
-
-      const link = document.createElement("a");
-      link.download = `container-${Date.now()}.png`;
-      link.href = dataURL;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    },
-  }));
+    const link = document.createElement("a");
+    link.download = `container-${Date.now()}.png`;
+    link.href = dataURL;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div
@@ -398,8 +376,13 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
         position: "relative",
         ...style,
       }}
-    />
+    >
+      <button
+        onClick={handleExportPNG}
+        className="absolute top-5 md:top-7 right-5 w-[90%] md:w-56 flex justify-center items-center bg-blue-400 hover:bg-blue-500 py-2 text-white rounded cursor-pointer"
+      >
+        Export PNG
+      </button>
+    </div>
   );
-});
-
-export default ThreeJsStaticOptimized;
+}
