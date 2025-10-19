@@ -65,10 +65,10 @@ const defaultBoxes = [
   { box: "32 ft Container", length: 9.75, width: 2.35, height: 2.39 },
 ];
 
-const API_BASE = import.meta.env.VITE_DEV;
+// const API_BASE = import.meta.env.VITE_DEV;
 
 function BoxUI() {
-  const threeRef = useRef<{ exportPNG?: () => void } | null>(null);
+  const threeRef = useRef<{ exportPNG: () => void } | null>(null);
   const [boxDimensions, setBoxDimensions] = useState<BoxDimensions[]>([
     {
       length: "",
@@ -354,7 +354,7 @@ function BoxUI() {
         <h1 className="hidden md:block text-2xl font-bold px-5">📦BoxLogic</h1>
 
         <div className="flex justify-between items-center mt-5 px-5">
-          <p className="text-[15px]">Box Dimensions</p>
+          <p className="text-[15px] font-semibold">Box Dimensions</p>
           <button
             onClick={addBox}
             className="text-2xl h-10 w-10 flex justify-center items-center rounded-full hover:bg-gray-100 cursor-pointer text-black"
