@@ -1,17 +1,15 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
   MdOutlineKeyboardArrowUp,
   MdOutlineKeyboardArrowDown,
   MdDelete 
 } from "react-icons/md";
 import { IoMdDownload } from "react-icons/io";
-import { FaDownload } from "react-icons/fa6";
 import ThreeJsStaticOptimized from "./ThreeJsStaticOptimized";
 import Background from '../assets/Background.png';
 import Box from '../assets/Box.png';
 import RightSideBar from '../assets/RightSideBar.png';
 import LeftSideBar from '../assets/LeftSideBar.png';
-import TrikonaLogo from '../assets/TrikonaLogo.png';
 import { toast } from "sonner";
 
 interface BoxDimensions {
@@ -68,7 +66,6 @@ const defaultBoxes = [
 const API_BASE = import.meta.env.VITE_DEV;
 
 function BoxUI() {
-  const threeRef = useRef<{ exportPNG?: () => void } | null>(null);
   const [boxDimensions, setBoxDimensions] = useState<BoxDimensions[]>([
     {
       length: "",
@@ -100,22 +97,19 @@ function BoxUI() {
   const [rightSideBar, setRightSideBar] = useState(() => window.innerWidth >= 768);
 
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
-      if (e.matches) {
-        setLeftSideBar(true);
-        setRightSideBar(true);
-      } else {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
         setLeftSideBar(false);
         setRightSideBar(false);
+      } else {
+        setLeftSideBar(true);
+        setRightSideBar(true);
       }
     };
-    handleChange(mq);
-    mq.addEventListener("change", handleChange);
-    return () => mq.removeEventListener("change", handleChange);
-  }, []);
-  
 
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const [totalBoxVolume, setTotalBoxVolume] = useState<number>(0);
   const [totalBoxWeight, setTotalBoxWeight] = useState<number>(0);
@@ -166,8 +160,6 @@ function BoxUI() {
 
   const convertToMeters = (value: number, unit: string): number => {
     switch (unit) {
-      case "ft":
-        return value * 0.3048;
       case "cm":
         return value / 100;
       case "mm":
@@ -341,7 +333,23 @@ function BoxUI() {
       <div className="flex justify-between items-center md:hidden w-full relative top-0 left-0 bg-white py-5 px-5 z-50">
         <h1 className="text-2xl font-semibold">📦BoxLogic</h1>
         <button
-          className="border border-gray-300 hover:bg-gray-100 cursor-pointer px-3 py-3 rounded-md flex items-center" onClick={() => threeRef.current?.exportPNG?.()}>
+          className="border border-gray-300 hover:bg-gray-100 cursor-pointer px-3 py-3 rounded-md flex items-center"
+          onClick={() => {
+            if (!results) return;
+            const blob = new Blob(
+              [JSON.stringify({ results, numContainers }, null, 2)],
+              {
+                type: "application/json",
+              }
+            );
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "packing-results.json";
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
           <IoMdDownload />
         </button>
       </div>
@@ -351,7 +359,7 @@ function BoxUI() {
           leftSideBar ? "translate-x-0" : "-translate-x-full"
         } w-76 md:w-64 transition-all duration-300 ease-in bg-white h-screen z-20 py-5 overflow-y-auto absolute top-0 left-0 border-r border-gray-300 mt-10 md:mt-0`}
       >
-        <h1 className="hidden md:block text-2xl font-bold px-5">📦BoxLogic</h1>
+        <h1 className="hidden md:block text-2xl font-semibold px-5">📦 BoxLogic</h1>
 
         <div className="flex justify-between items-center mt-5 px-5">
           <p className="text-[15px]">Box Dimensions</p>
@@ -413,7 +421,6 @@ function BoxUI() {
                       onChange={(e) => updateBoxField(index, "unit", e.target.value)}
                     >
                       <option value="m">m</option>
-                      <option value="ft">ft</option>
                       <option value="cm">cm</option>
                       <option value="mm">mm</option>
                       <option value="in">in</option>
@@ -435,7 +442,6 @@ function BoxUI() {
                       onChange={(e) => updateBoxField(index, "unit", e.target.value)}
                     >
                       <option value="m">m</option>
-                      <option value="ft">ft</option>
                       <option value="cm">cm</option>
                       <option value="mm">mm</option>
                       <option value="in">in</option>
@@ -457,7 +463,6 @@ function BoxUI() {
                       onChange={(e) => updateBoxField(index, "unit", e.target.value)}
                     >
                       <option value="m">m</option>
-                      <option value="ft">ft</option>
                       <option value="cm">cm</option>
                       <option value="mm">mm</option>
                       <option value="in">in</option>
@@ -540,22 +545,22 @@ function BoxUI() {
             className="w-full h-full object-cover bg-white absolute top-0 left-0"
           />
           {/* Top stats */}
-          <div className="w-full md:w-[65%] mx-0 absolute py-7 flex flex-col gap-3 text-white font-semibold p-3 rounded-md">
+          <div className="w-full md:w-[55%] mx-0 absolute py-7 flex flex-col gap-3 text-white font-semibold p-3 rounded-md">
             <div className="flex overflow-x-auto sidebar w-full">
               {boxDimensions.map((box, i) => (
-                <div key={i} className="text-black flex-shrink-0 flex flex-col items-center text-xl px-3">
-                  <p className="text-[13px]">
+                <div key={i} className="text-black flex-shrink-0 flex flex-col items-center text-sm px-3">
+                  <p className="text-[10px]">
                     Total:{" "}
                     {(
                       Number(box.length || 0) *
                       Number(box.width || 0) *
                       Number(box.height || 0) *
                       (Number(box.quantity || 1))
-                    ).toFixed(2)}{" "}
+                    ).toFixed(3)}{" "}
                     {box.unit}
                   </p>
                   <img src={Box} alt="box" className="w-[40%] object-contain" />
-                  <p className="text-[13px]">
+                  <p className="text-[10px]">
                     Weight: {(Number(box.weight || 0) * Number(box.quantity || 1)).toFixed(2)} kg
                   </p>
                 </div>
@@ -563,7 +568,7 @@ function BoxUI() {
             </div>
           </div>
 
-          <div className="md:min-w-56 md:max-h-30 bg-white border-2 flex flex-col border-gray-300 rounded-md absolute bottom-25 left-5 right-5 md:top-5 md:right-5 md:left-auto md:px-3 px-4 py-3 md:py-3 text-[14px] justify-center gap-2 font-semibold overflow-auto sidebar">
+          <div className="md:min-w-56 md:max-h-26 h-30 bg-white border-2 flex flex-col border-gray-300 rounded-md absolute bottom-25 left-5 right-5 md:top-5 md:right-5 md:left-auto md:px-3 px-4 py-3 md:py-3 text-[11px] justify-center gap-2 font-semibold overflow-auto sidebar">
             <p>Containers Required: {numContainers}</p>
             <p>Container Volume: {containerVolume} m³</p>
             <p>Total Boxes Volume: {totalBoxVolume} m³</p>
@@ -572,7 +577,6 @@ function BoxUI() {
 
           <div className="w-full top-[30%] md:top-[45%] absolute -translate-y-[30%] h-[500px]">
             <ThreeJsStaticOptimized
-              ref={threeRef}
               containerDimensions={containerDimensions}
               boxDimensions={boxDimensions}
               maxInstances={3500}
@@ -590,18 +594,6 @@ function BoxUI() {
           rightSideBar ? "translate-x-0" : "translate-x-full"
         } w-76 md:w-64 transition-all duration-300 ease-in bg-white h-screen z-20 py-1 px-3 overflow-auto absolute top-0 right-0 border-l border-gray-300 mt-15 md:mt-0`}
       >
-
-        {/* Add the Export PNG button near the top of right sidebar */}
-        <div className="flex justify-end mt-2 px-1">
-          <button
-            onClick={() => threeRef.current?.exportPNG?.()}
-            className="hidden md:flex items-center justify-center gap-2 border-2 border-blue-400 hover:bg-blue-400 hover:text-white cursor-pointer transition-all duration-300 text-black px-3 py-1 rounded-md font-semibold"
-          >
-            <FaDownload />
-            Export
-          </button>
-        </div>
-        
         {/* Results area */}
         <div className="pointer-events-auto">
           <div className="bg-white rounded-md p-3 max-h-30 overflow-auto sidebar">
@@ -654,7 +646,6 @@ function BoxUI() {
                 onChange={(e) => updateContainerField("unit", e.target.value)}
               >
                 <option value="m">m</option>
-                <option value="ft">ft</option>
                 <option value="cm">cm</option>
                 <option value="mm">mm</option>
                 <option value="in">in</option>
@@ -677,7 +668,6 @@ function BoxUI() {
                 onChange={(e) => updateContainerField("unit", e.target.value)}
               >
                 <option value="m">m</option>
-                <option value="ft">ft</option>
                 <option value="cm">cm</option>
                 <option value="mm">mm</option>
                 <option value="in">in</option>
@@ -700,7 +690,6 @@ function BoxUI() {
                 onChange={(e) => updateContainerField("unit", e.target.value)}
               >
                 <option value="m">m</option>
-                <option value="ft">ft</option>
                 <option value="cm">cm</option>
                 <option value="mm">mm</option>
                 <option value="in">in</option>
@@ -766,12 +755,6 @@ function BoxUI() {
               </div>
             ))}
           </div>
-        </div>
-
-        <div
-          className="flex items-center justify-center font-semibold w-full absolute bottom-16 left-[50%] translate-x-[-50%] md:static md:translate-x-0 md:bottom-0 md:left-auto">
-          <p>Made with ❤️ by</p>
-          <img src={TrikonaLogo} alt="Trikona Logo" className="w-18 object-contain" />
         </div>
       </div>
     </div>
