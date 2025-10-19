@@ -288,7 +288,7 @@ function BoxUI() {
         box_quantity: boxDimensions.map((b) => Number(b.quantity || 1)),
       };
 
-      const res = await fetch(`${API_BASE}/plan`, {
+      const res = await fetch(`https://boxlogic-backend.coolify.trikonatech.com/plan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
