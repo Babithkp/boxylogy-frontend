@@ -544,7 +544,7 @@ function BoxUI() {
             <div className="flex overflow-x-auto sidebar w-full">
               {boxDimensions.map((box, i) => (
                 <div key={i} className="text-black flex-shrink-0 flex flex-col items-center text-xl px-3">
-                  <p className="text-[13px]">
+                  <p className="text-[11px] md:text-[13px]">
                     Total:{" "}
                     {(
                       Number(box.length || 0) *
@@ -555,7 +555,7 @@ function BoxUI() {
                     {box.unit}
                   </p>
                   <img src={Box} alt="box" className="w-[40%] object-contain" />
-                  <p className="text-[13px]">
+                  <p className="text-[11px] md:text-[13px]">
                     Weight: {(Number(box.weight || 0) * Number(box.quantity || 1)).toFixed(2)} kg
                   </p>
                 </div>
