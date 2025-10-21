@@ -622,11 +622,16 @@ const handlePlan = async () => {
           <div className="w-full top-[30%] md:top-[45%] absolute -translate-y-[30%] h-[500px]">
             <ThreeJsStaticOptimized
               ref={threeRef}
-              containerDimensions={containerDimensions}
-              boxDimensions={boxDimensions}
+              containerDimensions={{
+                length: convertToMeters(Number(containerDimensions.width), containerDimensions.unit).toString(),
+                width: convertToMeters(Number(containerDimensions.length), containerDimensions.unit).toString(),
+                height: convertToMeters(Number(containerDimensions.height), containerDimensions.unit).toString(),
+                unit: "m", // always meters for ThreeJs
+              }}
+              boxDimensions={boxDimensions} 
               maxInstances={3500}
               style={{ height: 500 }}
-              packedItemsData={packedItems ?? undefined} // <- PASS API result here
+              packedItemsData={packedItems ?? undefined} // already in meters
               showGrid
             />
           </div>

@@ -187,6 +187,79 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     const boxesGroup = new THREE.Group();
     const meshes: THREE.Mesh[] = [];
 
+// After your containerGroup.add(contMesh) and wire
+// ------------------ Dimension Markers ------------------
+
+const createDimensionLine = (
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  color: string = "#FF0000"
+) => {
+  const points = [start, end];
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({ color });
+  return new THREE.Line(geometry, material);
+};
+
+const createTextLabel = (text: string, position: THREE.Vector3, color: string = "#000") => {
+  const canvas = document.createElement("canvas");
+  const size = 256;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = color;
+  ctx.font = "48px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, size / 2, size / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(0.5, 0.5, 0.5); // Adjust for sceneScale if needed
+  sprite.position.copy(position);
+  return sprite;
+};
+
+// container corners in local space
+const halfL = containerLength * sceneScale / 2;
+const halfW = containerWidth * sceneScale / 2;
+const halfH = containerHeight * sceneScale / 2;
+
+// Length marker (X axis, red)
+const lengthLine = createDimensionLine(
+  new THREE.Vector3(-halfL, 0, halfW + 0.1),
+  new THREE.Vector3(halfL, 0, halfW + 0.1),
+  "#FF0000"
+);
+containerGroup.add(lengthLine);
+containerGroup.add(
+  createTextLabel(`${containerLength.toFixed(2)} m`, new THREE.Vector3(0, 0, halfW + 0.15), "#FF0000")
+);
+
+// Width marker (Z axis, green)
+const widthLine = createDimensionLine(
+  new THREE.Vector3(halfL + 0.1, 0, -halfW),
+  new THREE.Vector3(halfL + 0.1, 0, halfW),
+  "#00FF00"
+);
+containerGroup.add(widthLine);
+containerGroup.add(
+  createTextLabel(`${containerWidth.toFixed(2)} m`, new THREE.Vector3(halfL + 0.15, 0, 0), "#00FF00")
+);
+
+// Height marker (Y axis, blue)
+const heightLine = createDimensionLine(
+  new THREE.Vector3(halfL + 0.1, 0, halfW + 0.1),
+  new THREE.Vector3(halfL + 0.1, containerHeight * sceneScale, halfW + 0.1),
+  "#0000FF"
+);
+containerGroup.add(heightLine);
+containerGroup.add(
+  createTextLabel(`${containerHeight.toFixed(2)} m`, new THREE.Vector3(halfL + 0.15, halfH, halfW + 0.15), "#0000FF")
+);
+
     if (packedItemsData && packedItemsData.length > 0) {
       packedItemsData.forEach((item, idx) => {
         const l = Number(item.dimensions.length) || 0.001;
