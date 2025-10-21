@@ -654,29 +654,6 @@ const handlePlan = async () => {
         {/* Results area */}
         <div className="pointer-events-auto">
           <div className="bg-white rounded-md p-3 max-h-30 overflow-auto sidebar">
-            <div className="flex justify-center items-center mb-2">
-              <button
-                className="border border-gray-300 hover:bg-gray-100 cursor-pointer px-3 py-1 rounded-md md:flex items-center gap-2 hidden w-full justify-center"
-                onClick={() => {
-                  if (!results) return;
-                  const blob = new Blob(
-                    [JSON.stringify({ results, numContainers }, null, 2)],
-                    {
-                      type: "application/json",
-                    }
-                  );
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "packing-results.json";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                <IoMdDownload />
-                Export Results
-              </button>
-            </div>
 
             {loading && <p>Planning containers... (this may take a moment)</p>}
             {errorMessage && <div className="text-red-600 font-medium">{errorMessage}</div>}
