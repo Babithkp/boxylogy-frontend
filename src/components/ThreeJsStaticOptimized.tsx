@@ -3,68 +3,59 @@ import React, { useEffect, useRef, useImperativeHandle } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-type BoxDim = {
-  length: string;
-  width: string;
-  height: string;
-  weight: string;
-  quantity: string;
-  rotation: boolean;
-  collapsed?: boolean;
-  unit: string;
-};
-
-type ContainerDim = {
-  length: string;
-  width: string;
-  height: string;
-  unit?: string;
-};
-
 type PackedItemData = {
   name: string;
-  position: any;
+  position: any; // expected to be [x,y,z] in meters or {x,y,z} in meters
   dimensions: {
-    length: number;
-    width: number;
-    height: number;
+    length: number; // meters
+    width: number;  // meters
+    height: number; // meters
   };
 };
 
+type ContainerResult = {
+  container_name?: string;
+  utilization?: string | number;
+  container_dimensions?: {
+    length: number; // meters
+    width: number;
+    height: number;
+  };
+  packed_items_data?: PackedItemData[];
+};
+
 type Props = {
-  containerDimensions: ContainerDim;
-  boxDimensions: BoxDim[];
+  containerDimensions: { length: string; width: string; height: string; unit?: string };
+  boxDimensions?: any[]; // fallback if no packedItemsData
   style?: React.CSSProperties;
   className?: string;
   maxInstances?: number;
   showGrid?: boolean;
-  packedItemsData?: PackedItemData[];
+  packedItemsData?: PackedItemData[]; // legacy single container
+  containers?: ContainerResult[]; // optional multi-container results (already in meters)
 };
 
 type ExportHandles = {
   exportPNG: () => void;
 };
 
-const convertToMeters = (value: number, unit: string = "m"): number => {
-  switch (unit) {
-    case "ft":
-      return value * 0.3048;
-    case "cm":
-      return value / 100;
-    case "mm":
-      return value / 1000;
-    case "in":
-      return value * 0.0254;
-    case "m":
-    default:
-      return value;
+const parsePositionRaw = (pos: any | undefined): [number, number, number] => {
+  if (!pos) return [0, 0, 0];
+  if (Array.isArray(pos) && pos.length >= 3) return [Number(pos[0]) || 0, Number(pos[1]) || 0, Number(pos[2]) || 0];
+  if (typeof pos === "object") {
+    return [
+      Number((pos as any).x ?? (pos as any)[0] ?? 0) || 0,
+      Number((pos as any).y ?? (pos as any)[1] ?? 0) || 0,
+      Number((pos as any).z ?? (pos as any)[2] ?? 0) || 0,
+    ];
   }
+  return [0, 0, 0];
 };
 
 const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function ThreeJsStaticOptimized(
   {
     containerDimensions,
-    boxDimensions,
+    boxDimensions = [],
     style,
     className,
     maxInstances = 1200,
@@ -82,7 +73,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // --- Cleanup previous scene if any ---
+    // cleanup previous
     if (rendererRef.current) {
       try {
         rendererRef.current.forceContextLoss();
@@ -108,7 +99,6 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
       rafRef.current = null;
     }
 
-    // --- Scene / Camera / Renderer ---
     const mount = mountRef.current!;
     const width = mount.clientWidth || 600;
     const height = mount.clientHeight || 400;
@@ -126,7 +116,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     rendererRef.current = renderer;
     mount.appendChild(renderer.domElement);
 
-    // --- Lights ---
+    // Lights
     const hemi = new THREE.HemisphereLight(0xffffff, 0x666666, 0.9);
     hemi.position.set(0, 50, 0);
     scene.add(hemi);
@@ -134,11 +124,10 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     dir.position.set(10, 20, 10);
     scene.add(dir);
 
-    // --- Container dimensions ---
-    const unit = containerDimensions.unit ?? "m";
-    const contL = convertToMeters(Number(containerDimensions.length) || 0, unit);
-    const contW = convertToMeters(Number(containerDimensions.width) || 0, unit);
-    const contH = convertToMeters(Number(containerDimensions.height) || 0, unit);
+    // parse container dims from props — these are expected to be meters already
+    const contL = Number(containerDimensions.length) || 0;
+    const contW = Number(containerDimensions.width) || 0;
+    const contH = Number(containerDimensions.height) || 0;
 
     const containerLength = contL > 0 ? contL : 2;
     const containerWidth = contW > 0 ? contW : 1.5;
@@ -148,11 +137,28 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     const targetMax = 8;
     const sceneScale = maxDim > 0 ? targetMax / maxDim : 1;
 
-    // --- Container group ---
+    // Grid helper
+    if (showGrid) {
+      const gridSize = Math.max(containerLength, containerWidth) * sceneScale || 5;
+      const grid = new THREE.GridHelper(gridSize, 10);
+      try {
+        ((grid.material as unknown) as { opacity: number }).opacity = 0.1;
+        (grid.material as THREE.Material).transparent = true;
+      } catch (e) {
+        console.log(e);
+      }
+      grid.position.y = 0.001;
+      scene.add(grid);
+    }
+
+    // visual pad to avoid z-fighting
+    const visualPad = 0.002; // 2 mm
+    const colorList = ["#58A6FF", "#6BCB77", "#FFD93D", "#FF6B6B", "#9D5CFF", "#F0A500", "#4D96FF"];
+
+    // build a single container centered
     const containerGroup = new THREE.Group();
     scene.add(containerGroup);
 
-    // Container mesh
     const contGeometry = new THREE.BoxGeometry(
       containerLength * sceneScale,
       containerHeight * sceneScale,
@@ -170,7 +176,6 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     contMesh.position.y = (containerHeight * sceneScale) / 2;
     containerGroup.add(contMesh);
 
-    // Wireframe edges
     const wire = new THREE.LineSegments(
       new THREE.EdgesGeometry(contGeometry),
       new THREE.LineBasicMaterial({ color: "#B8D5F3", transparent: true, opacity: 0.6 })
@@ -178,121 +183,123 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     wire.position.copy(contMesh.position);
     containerGroup.add(wire);
 
-    // Grid helper
-    if (showGrid) {
-      const gridSize = Math.max(containerLength, containerWidth) * sceneScale;
-      const grid = new THREE.GridHelper(gridSize, 10);
-      (grid.material as THREE.Material).transparent = true;
-      // assign opacity safely
+    // Place boxes (assuming packedItemsData dims & positions are meters)
+    const boxesGroup = new THREE.Group();
+    const meshes: THREE.Mesh[] = [];
+
+    if (packedItemsData && packedItemsData.length > 0) {
+      packedItemsData.forEach((item, idx) => {
+        const l = Number(item.dimensions.length) || 0.001;
+        const w = Number(item.dimensions.width) || 0.001;
+        const h = Number(item.dimensions.height) || 0.001;
+        const raw = parsePositionRaw(item.position); // raw is interpreted as meters now
+
+        let px = raw[0];
+        let py = raw[1];
+        let pz = raw[2];
+
+        // clamp using meters
+        px = Math.max(0, Math.min(px, containerLength - l));
+        py = Math.max(0, Math.min(py, containerHeight - h));
+        pz = Math.max(0, Math.min(pz, containerWidth - w));
+
+        const renderL = Math.max(0.0001, l - visualPad);
+        const renderW = Math.max(0.0001, w - visualPad);
+        const renderH = Math.max(0.0001, h - visualPad);
+
+        const geom = new THREE.BoxGeometry(renderL * sceneScale, renderH * sceneScale, renderW * sceneScale);
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(colorList[idx % colorList.length]),
+          roughness: 0.6,
+          metalness: 0.05,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+
+        const padShift = visualPad / 2;
+        mesh.position.set(
+          (px + padShift + renderL / 2 - containerLength / 2) * sceneScale,
+          (py + padShift + renderH / 2) * sceneScale,
+          (pz + padShift + renderW / 2 - containerWidth / 2) * sceneScale
+        );
+
+        boxesGroup.add(mesh);
+        meshes.push(mesh);
+      });
+
+      scene.add(boxesGroup);
+
+      // Quick overlap check using Box3 (warn only)
       try {
-        ((grid.material as unknown) as { opacity: number }).opacity = 0.1;
+        const boxesA = meshes.map(m => new THREE.Box3().setFromObject(m));
+        for (let i = 0; i < boxesA.length; i++) {
+          for (let j = i + 1; j < boxesA.length; j++) {
+            const ia = boxesA[i];
+            const ib = boxesA[j];
+            if (ia.intersectsBox(ib)) {
+              const minX = Math.max(ia.min.x, ib.min.x);
+              const maxX = Math.min(ia.max.x, ib.max.x);
+              const minY = Math.max(ia.min.y, ib.min.y);
+              const maxY = Math.min(ia.max.y, ib.max.y);
+              const minZ = Math.max(ia.min.z, ib.min.z);
+              const maxZ = Math.min(ia.max.z, ib.max.z);
+              if (maxX > minX && maxY > minY && maxZ > minZ) {
+                console.warn(`Renderer: Overlap detected between box ${i} and ${j}`);
+              }
+            }
+          }
+        }
       } catch (e) {
-        console.log(e);  
+        console.warn("Overlap check failed", e);
       }
-      grid.position.y = 0.001;
-      scene.add(grid);
+    } else {
+      const instances: { l: number; w: number; h: number; idx: number }[] = [];
+      (boxDimensions || []).forEach((b: any, ix: number) => {
+        const qty = Math.max(1, Math.floor(Number(b.quantity) || 1));
+        for (let i = 0; i < qty; i++) {
+          const L = b.unit ? (b.unit === "m" ? Number(b.length || 0) : Number(b.length || 0)) : Number(b.length || 0);
+          const W = b.unit ? (b.unit === "m" ? Number(b.width || 0) : Number(b.width || 0)) : Number(b.width || 0);
+          const H = b.unit ? (b.unit === "m" ? Number(b.height || 0) : Number(b.height || 0)) : Number(b.height || 0);
+          instances.push({ l: Math.max(0.0001, L), w: Math.max(0.0001, W), h: Math.max(0.0001, H), idx: ix });
+        }
+      });
+
+      let cursorX = 0;
+      let cursorZ = 0;
+      let layerHeight = 0;
+      const padding = 0.01;
+      const gg = new THREE.Group();
+
+      for (const it of instances) {
+        if (cursorX + it.l > containerLength) {
+          cursorX = 0;
+          cursorZ += layerHeight + padding;
+          layerHeight = 0;
+        }
+        if (cursorZ + it.w > containerWidth) break;
+
+        const renderL = Math.max(0.0001, it.l - visualPad);
+        const renderW = Math.max(0.0001, it.w - visualPad);
+        const renderH = Math.max(0.0001, it.h - visualPad);
+
+        const geom = new THREE.BoxGeometry(renderL * sceneScale, renderH * sceneScale, renderW * sceneScale);
+        const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color("#9DD3FF") });
+        const mesh = new THREE.Mesh(geom, mat);
+
+        mesh.position.set(
+          (cursorX + renderL / 2 - containerLength / 2) * sceneScale,
+          (renderH / 2) * sceneScale,
+          (cursorZ + renderW / 2 - containerWidth / 2) * sceneScale
+        );
+
+        gg.add(mesh);
+        cursorX += it.l + padding;
+        layerHeight = Math.max(layerHeight, it.w);
+      }
+
+      scene.add(gg);
     }
 
-    // --- Helper functions ---
-    const parsePositionRaw = (pos: any | undefined): [number, number, number] => {
-      if (!pos) return [0, 0, 0];
-      if (Array.isArray(pos) && pos.length >= 3) return [Number(pos[0]) || 0, Number(pos[1]) || 0, Number(pos[2]) || 0];
-      if (typeof pos === "object") {
-        return [
-          Number(pos.x ?? pos[0] ?? 0) || 0,
-          Number(pos.y ?? pos[1] ?? 0) || 0,
-          Number(pos.z ?? pos[2] ?? 0) || 0,
-        ];
-      }
-      return [0, 0, 0];
-    };
-
-    // --- Box placement ---
-    const createBoxesGroup = (boxes: PackedItemData[] | null) => {
-      const group = new THREE.Group();
-      const colorList = ["#58A6FF", "#6BCB77", "#FFD93D", "#FF6B6B", "#9D5CFF", "#F0A500", "#4D96FF"];
-
-      if (boxes && boxes.length > 0) {
-        boxes.forEach((item, idx) => {
-          const l = Number(item.dimensions.length) || 0.1;
-          const w = Number(item.dimensions.width) || 0.1;
-          const h = Number(item.dimensions.height) || 0.1;
-          const raw = parsePositionRaw(item.position);
-
-          // min-corner interpretation
-          let px = raw[0];
-          let py = raw[1];
-          let pz = raw[2];
-
-          // clamp to container bounds
-          px = Math.max(0, Math.min(px, containerLength - l));
-          py = Math.max(0, Math.min(py, containerHeight - h));
-          pz = Math.max(0, Math.min(pz, containerWidth - w));
-
-          const geom = new THREE.BoxGeometry(l * sceneScale, h * sceneScale, w * sceneScale);
-          const mat = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(colorList[idx % colorList.length]),
-            roughness: 0.6,
-            metalness: 0.05,
-            transparent: false,
-            opacity: 1,
-          });
-          const mesh = new THREE.Mesh(geom, mat);
-
-          mesh.position.set(
-            (px + l / 2 - containerLength / 2) * sceneScale,
-            (py + h / 2) * sceneScale,
-            (pz + w / 2 - containerWidth / 2) * sceneScale
-          );
-
-          group.add(mesh);
-        });
-      } else {
-        // fallback greedy placement
-        const instances: { l: number; w: number; h: number; idx: number }[] = [];
-        boxDimensions.forEach((b, ix) => {
-          const qty = Math.max(1, Math.floor(Number(b.quantity) || 1));
-          const L = convertToMeters(Number(b.length) || 0.1, b.unit);
-          const W = convertToMeters(Number(b.width) || 0.1, b.unit);
-          const H = convertToMeters(Number(b.height) || 0.1, b.unit);
-          for (let i = 0; i < qty; i++) instances.push({ l: L, w: W, h: H, idx: ix });
-        });
-
-        let cursorX = 0;
-        let cursorZ = 0;
-        let layerHeight = 0;
-        const padding = 0.01;
-
-        for (const it of instances) {
-          if (cursorX + it.l > containerLength) {
-            cursorX = 0;
-            cursorZ += layerHeight + padding;
-            layerHeight = 0;
-          }
-          if (cursorZ + it.w > containerWidth) break;
-
-          const geom = new THREE.BoxGeometry(it.l * sceneScale, it.h * sceneScale, it.w * sceneScale);
-          const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color("#9DD3FF") });
-          const mesh = new THREE.Mesh(geom, mat);
-
-          mesh.position.set(
-            (cursorX + it.l / 2 - containerLength / 2) * sceneScale,
-            (it.h / 2) * sceneScale,
-            (cursorZ + it.w / 2 - containerWidth / 2) * sceneScale
-          );
-
-          group.add(mesh);
-          cursorX += it.l + padding;
-          layerHeight = Math.max(layerHeight, it.w);
-        }
-      }
-
-      containerGroup.add(group);
-    };
-
-    createBoxesGroup(packedItemsData ?? null);
-
-    // --- OrbitControls ---
+    // controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controlsRef.current = controls;
     controls.enableDamping = true;
@@ -304,7 +311,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     controls.target.set(0, (containerHeight * sceneScale) / 2, 0);
     controls.update();
 
-    // --- Animate ---
+    // animate
     const animate = () => {
       rafRef.current = requestAnimationFrame(animate);
       controls.update();
@@ -312,7 +319,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     };
     rafRef.current = requestAnimationFrame(animate);
 
-    // --- Resize ---
+    // resize
     const handleResize = () => {
       if (!mountRef.current || !rendererRef.current) return;
       const w2 = mountRef.current.clientWidth || 600;
@@ -323,13 +330,13 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     };
     window.addEventListener("resize", handleResize);
 
-    // --- Cleanup ---
+    // cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       try {
-        controls.dispose();
-      } catch (e: unknown) {
+        controlsRef.current?.dispose();
+      } catch (e) {
         console.log(e);
       }
       try {
@@ -337,7 +344,7 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
         const canvas = renderer.domElement;
         if (mount.contains(canvas)) mount.removeChild(canvas);
         renderer.dispose();
-      } catch (e: unknown) {
+      } catch (e) {
         console.log(e);
       }
       rendererRef.current = null;
@@ -350,32 +357,27 @@ const ThreeJsStaticOptimized = React.forwardRef<ExportHandles, Props>(function T
     containerDimensions.width,
     containerDimensions.height,
     containerDimensions.unit,
-    packedItemsData,
-    boxDimensions,
+    JSON.stringify(packedItemsData ?? null),
+    JSON.stringify(boxDimensions ?? []),
     maxInstances,
     showGrid,
   ]);
 
-  // Expose exportPNG via ref
   useImperativeHandle(ref, () => ({
     exportPNG: () => {
       const renderer = rendererRef.current;
       const scene = sceneRef.current;
       if (!renderer || !scene) return;
-
       const cam = (controlsRef.current?.object as unknown) as THREE.Camera | undefined;
       if (!cam) return;
 
-      // Save previous clear color/alpha
       const prevColor = renderer.getClearColor(new THREE.Color());
       const prevAlpha = renderer.getClearAlpha();
 
-      // render with white background for export
       renderer.setClearColor(new THREE.Color("#ffffff"), 1);
       renderer.render(scene, cam);
       const dataURL = renderer.domElement.toDataURL("image/png");
 
-      // restore clear color
       renderer.setClearColor(prevColor, prevAlpha);
 
       const link = document.createElement("a");

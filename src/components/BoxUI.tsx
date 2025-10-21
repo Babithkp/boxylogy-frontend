@@ -255,81 +255,130 @@ function BoxUI() {
     }));
   };
 
-  const handlePlan = async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    setResults(null);
-    setNumContainers(null);
-    setPackedItems(null);
+const handlePlan = async () => {
+  setLoading(true);
+  setErrorMessage(null);
+  setResults(null);
+  setNumContainers(null);
+  setPackedItems(null);
 
-    try {
-      const maxCapNum = Number(containerDimensions.maxCapacity || 0);
-      if (containerDimensions.maxCapacity && !isNaN(maxCapNum) && maxCapNum < totalBoxWeight) {
-        toast.error("Container capacity is less than total box weight. Please adjust container capacity or box weights.");
-        setLoading(false);
-        return;
-      }
-
-      const payload = {
-        container_length: Number(containerDimensions.length || 0),
-        container_width: Number(containerDimensions.width || 0),
-        container_height: Number(containerDimensions.height || 0),
-        bigger_first: containerDimensions.fit === "BiggerFirst" || false,
-        distribute_items: false,
-        rotation: false,
-        packing_strategy:
-          containerDimensions.fit === "BiggerFirst" ? "best_fit" : "best_fit",
-        verbose: false,
-        box_name: boxDimensions.map((b) => b.boxName || "Box"),
-        box_length: boxDimensions.map((b) => Number(b.length || 0)),
-        box_width: boxDimensions.map((b) => Number(b.width || 0)),
-        box_height: boxDimensions.map((b) => Number(b.height || 0)),
-        box_weight: boxDimensions.map((b) => Number(b.weight || 0)),
-        box_quantity: boxDimensions.map((b) => Number(b.quantity || 1)),
-      };
-
-      const res = await fetch(`https://boxlogic-backend.coolify.trikonatech.com/plan`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        const msg = err?.error || `Server error: ${res.statusText}`;
-        setErrorMessage(msg);
-        setLoading(false);
-        toast.error("Calculation failed. Please try again.");
-        return;
-      }
-
-      const json = await res.json();
-
-      setResults(json.results || []);
-      toast.success("Calculation completed successfully.");
-      setNumContainers(json.num_containers || 0);
-
-      if (json.results && json.results.length > 0) {
-        const first = json.results[0];
-        setPackedItems(first.packed_items_data || []);
-        if (first.container_dimensions) {
-          setContainerDimensions((prev) => ({
-            ...prev,
-            length: String(first.container_dimensions.length || prev.length),
-            width: String(first.container_dimensions.width || prev.width),
-            height: String(first.container_dimensions.height || prev.height),
-            unit: "m",
-          }));
-        }
-      }
-    } catch (err: unknown) {
-      setErrorMessage((err as Error).message || "Unknown error");
-    } finally {
+  try {
+    const maxCapNum = Number(containerDimensions.maxCapacity || 0);
+    if (containerDimensions.maxCapacity && !isNaN(maxCapNum) && maxCapNum < totalBoxWeight) {
+      toast.error("Container capacity is less than total box weight. Please adjust container capacity or box weights.");
       setLoading(false);
+      return;
     }
-  };
+
+    // helpers: to / from meters
+    const toMeters = (value: number, unit: string) => {
+      switch (unit) {
+        case "ft": return value * 0.3048;
+        case "cm": return value / 100;
+        case "mm": return value / 1000;
+        case "in": return value * 0.0254;
+        case "m":
+        default: return value;
+      }
+    };
+    const fromMeters = (valueInMeters: number, unit: string) => {
+      switch (unit) {
+        case "ft": return valueInMeters / 0.3048;
+        case "cm": return valueInMeters * 100;
+        case "mm": return valueInMeters * 1000;
+        case "in": return valueInMeters / 0.0254;
+        case "m":
+        default: return valueInMeters;
+      }
+    };
+
+    // Convert container dims (UI may have unit field)
+    const containerUnit = containerDimensions.unit ?? "m";
+    const containerLength_m = toMeters(Number(containerDimensions.length || 0), containerUnit);
+    const containerWidth_m  = toMeters(Number(containerDimensions.width  || 0), containerUnit);
+    const containerHeight_m = toMeters(Number(containerDimensions.height || 0), containerUnit);
+
+    // Convert boxes -> produce arrays for the API in meters
+    const box_name = boxDimensions.map((b) => b.boxName || "Box");
+    const box_length = boxDimensions.map((b) => toMeters(Number(b.length || 0), b.unit ?? "m"));
+    const box_width  = boxDimensions.map((b) => toMeters(Number(b.width  || 0), b.unit ?? "m"));
+    const box_height = boxDimensions.map((b) => toMeters(Number(b.height || 0), b.unit ?? "m"));
+    const box_weight = boxDimensions.map((b) => Number(b.weight || 0));
+    const box_quantity = boxDimensions.map((b) => Number(b.quantity || 1));
+    const box_rotation = boxDimensions.map((b) => !!b.rotation);
+
+    // Build payload — everything in meters now
+    const payload = {
+      container_length: containerLength_m,
+      container_width: containerWidth_m,
+      container_height: containerHeight_m,
+      bigger_first: containerDimensions.fit === "BiggerFirst" || false,
+      distribute_items: false,
+      rotation: false,
+      packing_strategy: containerDimensions.fit === "BiggerFirst" ? "best_fit" : "best_fit",
+      verbose: false,
+      box_name,
+      box_length,
+      box_width,
+      box_height,
+      box_weight,
+      box_quantity,
+      box_rotation,
+      sent_units: "m", // optional metadata
+    };
+
+    const res = await fetch(`https://boxlogic-backend.coolify.trikonatech.com/plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      const msg = err?.error || `Server error: ${res.statusText}`;
+      setErrorMessage(msg);
+      setLoading(false);
+      toast.error("Calculation failed. Please try again.");
+      return;
+    }
+
+    const json = await res.json();
+    const serverResults = Array.isArray(json.results) ? json.results : [];
+    setResults(serverResults);
+    setNumContainers(json.num_containers ?? serverResults.length ?? 0);
+
+    if (serverResults.length > 0) {
+      const first = serverResults[0];
+      setPackedItems(first.packed_items_data || []);
+      if (first.container_dimensions) {
+        const returned = first.container_dimensions;
+        const uiUnit = containerDimensions.unit ?? "m";
+
+        const lengthForUI = fromMeters(Number(returned.length ?? containerLength_m), uiUnit);
+        const widthForUI  = fromMeters(Number(returned.width  ?? containerWidth_m), uiUnit);
+        const heightForUI = fromMeters(Number(returned.height ?? containerHeight_m), uiUnit);
+
+        // keep the unit the user currently has selected
+        setContainerDimensions((prev) => ({
+          ...prev,
+          length: String(Number(lengthForUI)),
+          width:  String(Number(widthForUI)),
+          height: String(Number(heightForUI)),
+          unit: uiUnit,
+        }));
+      }
+    } else {
+      setPackedItems(null);
+    }
+
+    toast.success("Calculation completed successfully.");
+  } catch (err: unknown) {
+    setErrorMessage((err as Error).message || "Unknown error");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const deleteBox = (index: number) => {
     setBoxDimensions((prev) => prev.filter((_, i) => i !== index));
@@ -605,7 +654,7 @@ function BoxUI() {
         {/* Results area */}
         <div className="pointer-events-auto">
           <div className="bg-white rounded-md p-3 max-h-30 overflow-auto sidebar">
-            {/* <div className="flex justify-center items-center mb-2">
+            <div className="flex justify-center items-center mb-2">
               <button
                 className="border border-gray-300 hover:bg-gray-100 cursor-pointer px-3 py-1 rounded-md md:flex items-center gap-2 hidden w-full justify-center"
                 onClick={() => {
@@ -627,7 +676,7 @@ function BoxUI() {
                 <IoMdDownload />
                 Export Results
               </button>
-            </div> */}
+            </div>
 
             {loading && <p>Planning containers... (this may take a moment)</p>}
             {errorMessage && <div className="text-red-600 font-medium">{errorMessage}</div>}
