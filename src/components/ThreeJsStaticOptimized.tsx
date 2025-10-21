@@ -304,6 +304,9 @@ containerGroup.add(
       // Quick overlap check using Box3 (warn only)
       try {
         const boxesA = meshes.map(m => new THREE.Box3().setFromObject(m));
+        let overlapDetected = false;
+
+        outerLoop: // label to break nested loops
         for (let i = 0; i < boxesA.length; i++) {
           for (let j = i + 1; j < boxesA.length; j++) {
             const ia = boxesA[i];
@@ -315,9 +318,11 @@ containerGroup.add(
               const maxY = Math.min(ia.max.y, ib.max.y);
               const minZ = Math.max(ia.min.z, ib.min.z);
               const maxZ = Math.min(ia.max.z, ib.max.z);
-              // if (maxX > minX && maxY > minY && maxZ > minZ) {
-              //   console.warn(`Renderer: Overlap detected between box ${i} and ${j}`);
-              // }
+              if (maxX > minX && maxY > minY && maxZ > minZ) {
+                console.log(`Renderer: Overlap detected`, overlapDetected);
+                overlapDetected = true;
+                break outerLoop;
+              }
             }
           }
         }
